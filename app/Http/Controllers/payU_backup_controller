@@ -1,0 +1,96 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Support\Facades\Http;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+
+
+class PayUController extends Controller
+{
+    
+    public function payushowCheckout()
+    {
+        return view('payu.checkout'); 
+    }
+
+    public function generateHash(Request $request)
+    {
+        $key = 'TnzDmn';
+        $salt = 'zD5cQmAPWR102q2ZXRkoRc2WD2T9h55U';
+
+        $txnid = uniqid('txn_', true);
+        $amount = $request->input('amount');
+        $productinfo = $request->input('productinfo');
+        $firstname = $request->input('firstname');
+        $email = $request->input('email');
+
+        // Hash sequence: key|txnid|amount|productinfo|firstname|email|||||||||||salt
+        $hashString = $key . '|' . $txnid . '|' . $amount . '|' . $productinfo . '|' .
+                    $firstname . '|' . $email . '|||||||||||' . $salt;
+
+        $hash = strtolower(hash('sha512', $hashString));
+
+        return response()->json([
+            'hash' => $hash,
+            'txnid' => $txnid,
+            'key' => $key,
+            'amount' => $amount,
+            'productinfo' => $productinfo,
+            'firstname' => $firstname,
+            'email' => $email
+        ]);
+    }
+
+    private function verifyHash($data)
+    {
+        $key = 'TnzDmn';
+        $salt = 'zD5cQmAPWR102q2ZXRkoRc2WD2T9h55U';
+
+        $hashSequence = $salt . '|' . $data['status'] . '|||||||||||' . $data['email'] . '|' . $data['firstname'] . '|' . $data['productinfo'] . '|' . $data['amount'] . '|' . $data['txnid'] . '|' . $key;
+        $generatedHash = strtolower(hash('sha512', $hashSequence));
+
+        return $generatedHash === $data['hash'];
+    }
+
+
+    public function success(Request $request)
+    {
+        // return view('payu.success');
+        $data = $request->all(); // Contains transaction details
+        \Log::info('PayU Success', $data);
+
+        // Optional: Verify the hash
+        if ($this->verifyHash($data)) {
+            // Save transaction to DB, mark as paid
+            return view('payu.success', ['data' => $data]);
+        } else {
+            // Possible tampering
+            return view('payu.failed', ['error' => 'Hash mismatch']);
+        }
+    }
+
+    public function failure(Request $request)
+    {
+        // return view('payu.failed');
+        $data = $request->all();
+        \Log::info('PayU Failure', $data);
+
+        return view('payu.failed', ['data' => $data]);
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+
